@@ -9,11 +9,20 @@ COPY mvnw.cmd .
 COPY pom.xml .
 COPY .mvn .mvn
 
-# Copiar código fuente
+# Copiar código fuente y SDK local
 COPY src src
+COPY Link-OS_SDK Link-OS_SDK
 
 # Dar permisos de ejecución a mvnw
 RUN chmod +x mvnw
+
+# Instalar la dependencia local de Zebra SDK
+RUN ./mvnw install:install-file \
+    -Dfile=Link-OS_SDK/PC/v2.15.5553/lib/ZSDK_API.jar \
+    -DgroupId=com.zebra.sdk \
+    -DartifactId=zsdk_api \
+    -Dversion=2.15.5553 \
+    -Dpackaging=jar
 
 # Compilar el proyecto
 RUN ./mvnw clean package -DskipTests
