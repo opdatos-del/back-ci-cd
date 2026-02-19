@@ -1,0 +1,230 @@
+name: CI/CD Pipeline - Build and Deploy
+
+on:
+    push:
+        branches:
+            - main
+            - master
+            - develop
+            - "feature/**"
+    pull_request:
+        branches:
+            - main
+            - master
+            - develop
+
+env:
+    REGISTRY: ghcr.io
+    IMAGE_NAME: ${{ github.repository }}
+    APP_PORT: "8080"
+    STAGING_PORT: "8081"
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            packages: write
+        outputs:
+            image-tag: ${{ steps.meta.outputs.tags }}
+
+        steps:
+            - name: Descargar código
+              uses: actions/checkout@v4
+
+            - name: Configurar Docker Buildx
+              uses: docker/setup-buildx-action@v3
+
+            - name: Iniciar sesión en Registro de Contenedores
+              uses: docker/login-action@v3
+              with:
+                  registry: ${{ env.REGISTRY }}
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Extraer metadatos con etiquetas de versión
+              id: meta
+              uses: docker/metadata-action@v5
+              with:
+                  images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+                  tags: |
+                      type=ref,event=branch
+                      type=semver,pattern={{version}}
+                      type=semver,pattern={{major}}.{{minor}}
+                      type=sha,prefix={{branch}}-
+                      type=raw,value=latest,enable={{is_default_branch}}
+                      type=raw,value={{date 'YYYY-MM-DD-HHmmss'}}
+
+            - name: Compilar y enviar imagen Docker
+              uses: docker/build-push-action@v5
+              with:
+                  context: .
+                  push: true
+                  tags: ${{ steps.meta.outputs.tags }}
+                  labels: ${{ steps.meta.outputs.labels }}
+                  cache-from: type=gha
+                  cache-to: type=gha,mode=max
+
+    deploy-production:
+        needs: build
+        runs-on: [self-hosted, windows-server]
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        environment: production
+        timeout-minutes: 15
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Log in to Container Registry
+              shell: powershell
+              run: |
+                  echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+
+            - name: Descargar imagen Docker (Última)
+              shell: powershell
+              run: |
+                  docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+                  Write-Host "Imagen descargada exitosamente"
+
+            - name: Detener y eliminar contenedor existente
+              shell: powershell
+              run: |
+                  $container = docker ps -a -q -f "name=backend-app"
+                  if ($container) {
+                    Write-Host "Deteniendo contenedor existente..."
+                    docker stop $container -t 30
+                    docker rm $container
+                  }
+
+            - name: Ejecutar contenedor Docker (Producción)
+              shell: powershell
+              run: |
+                  docker run -d `
+                    --name backend-app `
+                    -p ${{ env.APP_PORT }}:8080 `
+                    --restart unless-stopped `
+                    --health-cmd="curl -f http://localhost:8080/actuator/health || exit 1" `
+                    --health-interval=10s `
+                    --health-timeout=5s `
+                    --health-retries=3 `
+                    ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+            - name: Esperar a que el contenedor esté saludable
+              shell: powershell
+              run: |
+                  $maxAttempts = 30
+                  $attempt = 0
+                  $healthy = $false
+
+                  while ($attempt -lt $maxAttempts) {
+                    $health = docker inspect --format='{{.State.Health.Status}}' backend-app 2>$null
+                    if ($health -eq "healthy") {
+                      Write-Host "El contenedor está saludable"
+                      $healthy = $true
+                      break
+                    }
+                    Start-Sleep -Seconds 1
+                    $attempt++
+                  }
+
+                  if (-not $healthy) {
+                    Write-Host "El contenedor no logró estar saludable"
+                    docker logs backend-app
+                    exit 1
+                  }
+
+            - name: Verificar despliegue de producción
+              shell: powershell
+              run: |
+                  $running = docker ps -q -f "name=backend-app"
+                  if ($running) {
+                    Write-Host "Despliegue de producción exitoso"
+                    Write-Host "ID del Contenedor: $running"
+                    docker logs backend-app -n 20
+                  } else {
+                    Write-Host "El contenedor falló al iniciar en producción"
+                    exit 1
+                  }
+
+    despliegue-staging:
+        needs: build
+        runs-on: [self-hosted, windows-server]
+        if: github.ref == 'refs/heads/develop'
+        environment: staging
+        timeout-minutes: 15
+
+        steps:
+            - name: Descargar código
+              uses: actions/checkout@v4
+
+            - name: Iniciar sesión en Registro de Contenedores
+              shell: powershell
+              run: |
+                  echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+
+            - name: Descargar imagen Docker (Desarrollo)
+              shell: powershell
+              run: |
+                  docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:develop
+                  Write-Host "Imagen de staging descargada exitosamente"
+
+            - name: Detener y eliminar contenedor de staging existente
+              shell: powershell
+              run: |
+                  $container = docker ps -a -q -f "name=backend-app-staging"
+                  if ($container) {
+                    Write-Host "Deteniendo contenedor de staging existente..."
+                    docker stop $container -t 30
+                    docker rm $container
+                  }
+
+            - name: Ejecutar contenedor Docker (Staging)
+              shell: powershell
+              run: |
+                  docker run -d `
+                    --name backend-app-staging `
+                    -p ${{ env.STAGING_PORT }}:8080 `
+                    --restart unless-stopped `
+                    --health-cmd="curl -f http://localhost:8080/actuator/health || exit 1" `
+                    --health-interval=10s `
+                    --health-timeout=5s `
+                    --health-retries=3 `
+                    ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:develop
+
+            - name: Esperar a que el contenedor de staging esté saludable
+              shell: powershell
+              run: |
+                  $maxAttempts = 30
+                  $attempt = 0
+                  $healthy = $false
+
+                  while ($attempt -lt $maxAttempts) {
+                    $health = docker inspect --format='{{.State.Health.Status}}' backend-app-staging 2>$null
+                    if ($health -eq "healthy") {
+                      Write-Host "El contenedor de staging está saludable"
+                      $healthy = $true
+                      break
+                    }
+                    Start-Sleep -Seconds 1
+                    $attempt++
+                  }
+
+                  if (-not $healthy) {
+                    Write-Host "El contenedor de staging no logró estar saludable"
+                    docker logs backend-app-staging
+                    exit 1
+                  }
+
+            - name: Verificar despliegue de staging
+              shell: powershell
+              run: |
+                  $running = docker ps -q -f "name=backend-app-staging"
+                  if ($running) {
+                    Write-Host "Despliegue de staging exitoso"
+                    Write-Host "ID del Contenedor: $running"
+                    docker logs backend-app-staging -n 20
+                  } else {
+                    Write-Host "El contenedor de staging falló al iniciar"
+                    exit 1
+                  }
