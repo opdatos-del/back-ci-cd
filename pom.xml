@@ -73,6 +73,13 @@
 			<scope>test</scope>
 		</dependency>
 
+		<!-- Spring Dotenv para cargar .env -->
+		<dependency>
+			<groupId>me.paulschwarz</groupId>
+			<artifactId>spring-dotenv</artifactId>
+			<version>4.0.0</version>
+		</dependency>
+
 		<!-- Springdoc OpenAPI UI para documentación automática Swagger/OpenAPI -->
 		<dependency>
 			<groupId>org.springdoc</groupId>
