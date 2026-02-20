@@ -79,7 +79,8 @@ jobs:
             - name: Log in to Container Registry
               shell: powershell
               run: |
-                  echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+                  $token = "${{ secrets.GITHUB_TOKEN }}"
+                  $token | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
 
             - name: Descargar imagen Docker (Última)
               shell: powershell
@@ -161,7 +162,8 @@ jobs:
             - name: Iniciar sesión en Registro de Contenedores
               shell: powershell
               run: |
-                  echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+                  $token = "${{ secrets.GITHUB_TOKEN }}"
+                  $token | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
 
             - name: Descargar imagen Docker (Desarrollo)
               shell: powershell
