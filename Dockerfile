@@ -1,5 +1,5 @@
 # Etapa 1: Build
-FROM eclipse-temurin:21-jdk-windowsservercore-ltsc2019 AS builder
+FROM eclipse-temurin:21-jdk-windowsservercore-ltsc2022 AS builder
 
 WORKDIR /build
 
@@ -17,7 +17,7 @@ COPY Link-OS_SDK Link-OS_SDK
 RUN mvnw.cmd clean package -DskipTests
 
 # Etapa 2: Runtime
-FROM eclipse-temurin:21-jre-windowsservercore-ltsc2019
+FROM eclipse-temurin:21-jre-windowsservercore-ltsc2022
 
 WORKDIR /app
 
