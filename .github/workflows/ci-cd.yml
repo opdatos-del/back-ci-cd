@@ -79,7 +79,7 @@ jobs:
             - name: Log in to Container Registry
               shell: powershell
               run: |
-                  $token = "${{ secrets.GITHUB_TOKEN }}"
+                  $token = "${{ secrets.DOCKER_REGISTRY_TOKEN }}"
                   $token | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
 
             - name: Descargar imagen Docker (Última)
