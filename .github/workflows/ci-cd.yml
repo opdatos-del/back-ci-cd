@@ -83,7 +83,7 @@ jobs:
               shell: powershell
               run: |
                   $token = "${{ secrets.GITHUB_TOKEN }}"
-                  $token | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+                  $token | docker login ${{ env.REGISTRY }} -u ${{ github.repository_owner }} --password-stdin
 
             - name: Descargar imagen Docker (Última)
               shell: powershell
@@ -169,7 +169,7 @@ jobs:
               shell: powershell
               run: |
                   $token = "${{ secrets.GITHUB_TOKEN }}"
-                  $token | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+                  $token | docker login ${{ env.REGISTRY }} -u ${{ github.repository_owner }} --password-stdin
 
             - name: Descargar imagen Docker (Desarrollo)
               shell: powershell
