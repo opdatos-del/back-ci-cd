@@ -21,56 +21,39 @@ env:
 
 jobs:
     build:
-        runs-on: [self-hosted, Windows]
+        runs-on: ubuntu-latest
         permissions:
             contents: read
-            packages: write
         outputs:
-            image-tag: ${{ env.IMAGE_NAME }}:latest
+            build-version: ${{ steps.version.outputs.version }}
 
         steps:
             - name: Descargar código
               uses: actions/checkout@v4
 
-            - name: Iniciar sesión en Registro de Contenedores
-              uses: docker/login-action@v3
+            - name: Configurar JDK 21
+              uses: actions/setup-java@v4
               with:
-                  registry: ${{ env.REGISTRY }}
-                  username: ${{ github.repository_owner }}
-                  password: ${{ secrets.GITHUB_TOKEN }}
+                  java-version: '21'
+                  distribution: 'temurin'
+                  cache: maven
 
-            - name: Compilar imagen Docker
-              shell: powershell
-              run: |
-                  $branch = "${{ github.ref_name }}"
-                  $commit = "${{ github.sha }}".Substring(0, 7)
-                  $timestamp = (Get-Date -Format "yyyy-MM-dd-HHmmss")
-                  $tag = "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+            - name: Compilar con Maven
+              run: mvn clean package -DskipTests
 
-                  docker build -t "${tag}:${branch}" `
-                               -t "${tag}:${branch}-${commit}" `
-                               -t "${tag}:${timestamp}" `
-                               -t "${tag}:latest" .
+            - name: Obtener versión
+              id: version
+              run: echo "version=$(date +%s)" >> $GITHUB_OUTPUT
 
-                  if ($LASTEXITCODE -ne 0) {
-                    Write-Host "Build failed"
-                    exit 1
-                  }
-                  Write-Host "Build completado exitosamente"
+            - name: Subir JAR como artefacto
+              uses: actions/upload-artifact@v4
+              with:
+                  name: app-jar
+                  path: target/*.jar
+                  retention-days: 1
 
-            - name: Enviar imagen Docker a registro
-              shell: powershell
-              run: |
-                  $tag = "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
-
-                  docker push "${tag}:${{ github.ref_name }}"
-                  docker push "${tag}:latest"
-
-                  if ($LASTEXITCODE -ne 0) {
-                    Write-Host "Push failed"
-                    exit 1
-                  }
-                  Write-Host "Push completado exitosamente"
+            - name: Mostrar ruta del JAR
+              run: ls -la target/
 
     deploy-production:
         needs: build
@@ -78,26 +61,57 @@ jobs:
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         environment: production
         timeout-minutes: 15
-        permissions:
-            contents: read
-            packages: read
 
         steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
-
-            - name: Log in to Container Registry
-              uses: docker/login-action@v3
+            - name: Descargar artefacto JAR
+              uses: actions/download-artifact@v4
               with:
-                  registry: ${{ env.REGISTRY }}
-                  username: ${{ github.repository_owner }}
-                  password: ${{ secrets.GITHUB_TOKEN }}
+                  name: app-jar
+                  path: ./app
 
-            - name: Descargar imagen Docker (Última)
+            - name: Detener aplicación anterior
               shell: powershell
               run: |
-                  docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-                  Write-Host "Imagen descargada exitosamente"
+                  $processName = "java"
+                  $proc = Get-Process $processName -ErrorAction SilentlyContinue
+                  if ($proc) {
+                    Write-Host "Deteniendo proceso Java..."
+                    Stop-Process -Name $processName -Force -ErrorAction SilentlyContinue
+                    Start-Sleep -Seconds 3
+                  } else {
+                    Write-Host "No hay proceso Java ejecutándose"
+                  }
+
+            - name: Ejecutar aplicación
+              shell: powershell
+              run: |
+                  $jarFile = Get-ChildItem -Path ./app -Filter *.jar | Select-Object -First 1
+                  if (-not $jarFile) {
+                    Write-Host "No JAR file found"
+                    exit 1
+                  }
+                  
+                  $jarPath = $jarFile.FullName
+                  Write-Host "Ejecutando: $jarPath"
+                  
+                  # Ejecutar en segundo plano
+                  Start-Process -FilePath "java" `
+                               -ArgumentList "-jar", "`"$jarPath`"" `
+                               -WorkingDirectory "./app" `
+                               -NoNewWindow `
+                               -PassThru
+                  
+                  Write-Host "Aplicación iniciada exitosamente"
+                  Start-Sleep -Seconds 5
+                  
+                  # Verificar que se ejecutó
+                  $running = Get-Process java -ErrorAction SilentlyContinue
+                  if ($running) {
+                    Write-Host "✓ Aplicación ejecutándose en puerto ${{ env.APP_PORT }}"
+                  } else {
+                    Write-Host "Error: No se pudo iniciar la aplicación"
+                    exit 1
+                  }
 
             - name: Detener y eliminar contenedor existente
               shell: powershell
