@@ -2,7 +2,9 @@ package com.example.backend_jovyweb;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.context.annotation.PropertySource;
+import org.springframework.boot.context.properties.source.InvalidConfigurationPropertyNameException;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 
 /**
  * Clase principal de la aplicación Spring Boot.
@@ -10,7 +12,6 @@ import org.springframework.context.annotation.PropertySource;
  * y repositorios.
  */
 @SpringBootApplication
-@PropertySource("file:.env")
 public class BackendJovywebApplication {
 
 	/**
