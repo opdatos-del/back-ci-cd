@@ -67,7 +67,7 @@ jobs:
 
     deploy-production:
         needs: build
-        runs-on: [self-hosted, windows-server]
+        runs-on: [self-hosted, Windows]
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         environment: production
         timeout-minutes: 15
