@@ -150,7 +150,7 @@ jobs:
 
     despliegue-staging:
         needs: build
-        runs-on: [self-hosted, windows-server]
+        runs-on: [self-hosted, Windows]
         if: github.ref == 'refs/heads/develop'
         environment: staging
         timeout-minutes: 15
@@ -162,7 +162,7 @@ jobs:
             - name: Iniciar sesión en Registro de Contenedores
               shell: powershell
               run: |
-                  $token = "${{ secrets.GITHUB_TOKEN }}"
+                  $token = "${{ secrets.DOCKER_REGISTRY_TOKEN }}"
                   $token | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
 
             - name: Descargar imagen Docker (Desarrollo)
