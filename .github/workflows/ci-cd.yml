@@ -38,6 +38,9 @@ jobs:
                   distribution: 'temurin'
                   cache: maven
 
+            - name: Instalar dependencia local Zebra SDK
+              run: mvn install:install-file -Dfile=Link-OS_SDK/PC/v2.15.5553/lib/ZSDK_API.jar -DgroupId=com.zebra.sdk -DartifactId=zsdk_api -Dversion=2.15.5553 -Dpackaging=jar
+
             - name: Compilar con Maven
               run: mvn clean package -DskipTests
 
