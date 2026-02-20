@@ -71,6 +71,9 @@ jobs:
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         environment: production
         timeout-minutes: 15
+        permissions:
+            contents: read
+            packages: read
 
         steps:
             - name: Checkout code
@@ -154,6 +157,9 @@ jobs:
         if: github.ref == 'refs/heads/develop'
         environment: staging
         timeout-minutes: 15
+        permissions:
+            contents: read
+            packages: read
 
         steps:
             - name: Descargar código
