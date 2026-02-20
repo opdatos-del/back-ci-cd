@@ -2,6 +2,7 @@ package com.example.backend_jovyweb;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.annotation.PropertySource;
 
 /**
  * Clase principal de la aplicación Spring Boot.
@@ -9,6 +10,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * y repositorios.
  */
 @SpringBootApplication
+@PropertySource("file:.env")
 public class BackendJovywebApplication {
 
 	/**
