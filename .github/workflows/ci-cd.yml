@@ -66,26 +66,20 @@ jobs:
         timeout-minutes: 15
 
         steps:
-            - name: Descargar artefacto JAR
-              uses: actions/download-artifact@v4
-              with:
-                  name: app-jar
-                  path: ./app
-
             - name: Detener aplicación anterior
               shell: powershell
               run: |
                   $processName = "java"
                   $proc = Get-Process $processName -ErrorAction SilentlyContinue
                   if ($proc) {
-                    Write-Host "Deteniendo proceso Java..."
+                    Write-Host "Stopping Java process..."
                     Stop-Process -Name $processName -Force -ErrorAction SilentlyContinue
                     Start-Sleep -Seconds 3
                   } else {
-                    Write-Host "No hay proceso Java ejecutándose"
+                    Write-Host "No Java process running"
                   }
 
-            - name: Ejecutar aplicación
+            - name: Ejecutar aplicacion
               shell: powershell
               run: |
                   $jarFile = Get-ChildItem -Path ./app -Filter *.jar | Select-Object -First 1
@@ -95,84 +89,18 @@ jobs:
                   }
                   
                   $jarPath = $jarFile.FullName
-                  Write-Host "Ejecutando: $jarPath"
+                  Write-Host "Running: $jarPath"
                   
-                  # Ejecutar en segundo plano
-                  Start-Process -FilePath "java" `
-                               -ArgumentList "-jar", "`"$jarPath`"" `
-                               -WorkingDirectory "./app" `
-                               -NoNewWindow `
-                               -PassThru
+                  Start-Process -FilePath "java" -ArgumentList "-jar", $jarPath -WorkingDirectory "./app" -NoNewWindow
                   
-                  Write-Host "Aplicación iniciada exitosamente"
+                  Write-Host "Application started"
                   Start-Sleep -Seconds 5
                   
-                  # Verificar que se ejecutó
                   $running = Get-Process java -ErrorAction SilentlyContinue
                   if ($running) {
-                    Write-Host "✓ Aplicación ejecutándose en puerto ${{ env.APP_PORT }}"
+                    Write-Host "App is running on port 8080"
                   } else {
-                    Write-Host "Error: No se pudo iniciar la aplicación"
-                    exit 1
-                  }
-
-            - name: Detener y eliminar contenedor existente
-              shell: powershell
-              run: |
-                  $container = docker ps -a -q -f "name=backend-app"
-                  if ($container) {
-                    Write-Host "Deteniendo contenedor existente..."
-                    docker stop $container -t 30
-                    docker rm $container
-                  }
-
-            - name: Ejecutar contenedor Docker (Producción)
-              shell: powershell
-              run: |
-                  docker run -d `
-                    --name backend-app `
-                    -p ${{ env.APP_PORT }}:8080 `
-                    --restart unless-stopped `
-                    --health-cmd="curl -f http://localhost:8080/actuator/health || exit 1" `
-                    --health-interval=10s `
-                    --health-timeout=5s `
-                    --health-retries=3 `
-                    ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-
-            - name: Esperar a que el contenedor esté saludable
-              shell: powershell
-              run: |
-                  $maxAttempts = 30
-                  $attempt = 0
-                  $healthy = $false
-
-                  while ($attempt -lt $maxAttempts) {
-                    $health = docker inspect --format='{{.State.Health.Status}}' backend-app 2>$null
-                    if ($health -eq "healthy") {
-                      Write-Host "El contenedor está saludable"
-                      $healthy = $true
-                      break
-                    }
-                    Start-Sleep -Seconds 1
-                    $attempt++
-                  }
-
-                  if (-not $healthy) {
-                    Write-Host "El contenedor no logró estar saludable"
-                    docker logs backend-app
-                    exit 1
-                  }
-
-            - name: Verificar despliegue de producción
-              shell: powershell
-              run: |
-                  $running = docker ps -q -f "name=backend-app"
-                  if ($running) {
-                    Write-Host "Despliegue de producción exitoso"
-                    Write-Host "ID del Contenedor: $running"
-                    docker logs backend-app -n 20
-                  } else {
-                    Write-Host "El contenedor falló al iniciar en producción"
+                    Write-Host "Failed to start application"
                     exit 1
                   }
 
